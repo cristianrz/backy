@@ -1,0 +1,46 @@
+#!/bin/sh
+
+panic(){
+	printf "backy: %s\n" "$*"
+}
+
+backup(){
+	dir="$1"
+
+	mkdir -p "$1"
+
+	rsync \
+		-Pavu \
+		--delete \
+		--link-dest="${DEST}/last" \
+		--exclude-from="$CONF/excludes" \
+		"${SOURCE}/" \
+		"$dir" || true
+
+	rm -f "$DEST/last"
+	ln -s "$dir" "${DEST}/last"
+}
+
+set -eux
+
+CONF="$HOME/.config/backy"
+CONF_FILE="$HOME/.config/backy/config"
+
+mkdir -p "$CONF"
+
+[ ! -f "$CONF_FILE" ] && touch "$CONF_FILE"
+
+DEST="$(awk '/^Destination / { gsub(/Destination /,""); print }' "$CONF_FILE")"
+SOURCE="$(awk '/^Source / { gsub(/Source /,""); print }' "$CONF_FILE")"
+
+daily_date="$(date '+%Y-%m-%d')"
+monthly_date="$(date '+%Y-%m')"
+yearly_date="$(date '+%Y')"
+
+[ ! -d "$DEST" ] && panic "$DEST does not exist"
+[ ! -d "$SOURCE" ] && panic "$SOURCE does not exist"
+
+backup "$DEST/daily/$daily_date"
+backup "$DEST/monthly/$monthly_date"
+backup "$DEST/yearly/$yearly_date"
+
