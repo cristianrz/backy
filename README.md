@@ -1,54 +1,66 @@
 # backy
 
-Backs up a specific directory incrementally using only POSIX shell and `rsync`
-using a JBOF (Just Bunch Of Files) approach.
+Incremental backups using only POSIX shell and `rsync`.
 
-Creates the following structure:
+Uses hardlinks to deduplicate unchanged files across snapshots — full
+backup semantics at a fraction of the space.
+
+## How it works
+
+Each run creates three snapshots: daily, monthly, and yearly. A `last`
+symlink always points to the most recent backup and is used as the
+hardlink base for the next run, so only changed files take new space.
 
 ```
-backy
+/var/backups/backy
 ├── daily
-│   └── 2022-04-03
-├── last -> yearly/2022
+│   ├── 2024-03-01
+│   └── 2024-03-02
 ├── monthly
-│   └── 2022-04
-└── yearly
-    └── 2022
+│   └── 2024-03
+├── yearly
+│   └── 2024
+└── last -> daily/2024-03-02
 ```
 
-When ran, it will do the following:
+Old snapshots are pruned automatically: 30 dailies, 12 monthlies, 5 yearlies.
 
-* Backup the specified directory to a directory with the current date as a name
-inside `daily`
-* BDestination /mnt/e/backy
-Source /mnt/c/Users/cristianackup the specified directory to a directory with the current date as a name
-inside `weekly`
-* Backup the specified directory to a directory with the current date as a name
-inside `yearly`
+## Installation
 
-The link named `last` will always point to the last backup done. The next
-backup will use hard links to point to already existing files on the previous 
-backup to save space.
+```sh
+cp backy ~/.local/bin/backy
+chmod +x ~/.local/bin/backy
+```
 
-Config resides inside `$HOME/.config/backy` and contains two files, `config`
-and `excludes`.
-
-`config` contains the source and destination directory:
+Then add it to your crontab:
 
 ```
-Destination /var/backups/backy
+@daily backy
+```
+
+## Configuration
+
+Config lives in `~/.config/backy/`.
+
+**`~/.config/backy/config`** — source and destination:
+
+```
 Source /home/jimmy
+Destination /var/backups/backy
 ```
 
-`excludes` contains the excludes directories:
+**`~/.config/backy/excludes`** — directories to skip, one per line:
 
 ```
 .cache
 Downloads
 ```
 
-There is no automatic pruning of old archives (for now), although it is trivial
-to prune old archives since by opening the `daily` directory you can see all
-the daily archives and all the archives you don't need.
+## Encryption
 
-There is no encryption build in, `rclone` can be used for that.
+Not built in. Pipe the destination through
+[rclone](https://rclone.org/crypt/) for encrypted remote storage.
+
+## License
+
+BSD 3-Clause
