@@ -1,46 +1,56 @@
 #!/bin/sh
+set -eu
 
-panic(){
-	printf "backy: %s\n" "$*"
+CONF="$HOME/.config/backy"
+CONF_FILE="$CONF/config"
+
+panic() {
+	printf "backy: %s\n" "$*" >&2
+	exit 1
 }
 
-backup(){
+backup() {
 	dir="$1"
-
-	mkdir -p "$1"
-
-	rsync \
+	mkdir -p "$dir"
+	if ! rsync \
 		-Pavu \
 		--delete \
 		--link-dest="${DEST}/last" \
 		--exclude-from="$CONF/excludes" \
 		"${SOURCE}/" \
-		"$dir" || true
-
+		"$dir"; then
+		printf "backy: rsync failed for %s\n" "$dir" >&2
+	fi
 	rm -f "$DEST/last"
 	ln -s "$dir" "${DEST}/last"
 }
 
-set -eux
-
-CONF="$HOME/.config/backy"
-CONF_FILE="$HOME/.config/backy/config"
+rotate() {
+	dir="$1"
+	keep="$2"
+	find "$dir" -maxdepth 1 -mindepth 1 -type d | sort | head -n "-$keep" | \
+		xargs -r rm -rf
+}
 
 mkdir -p "$CONF"
-
 [ ! -f "$CONF_FILE" ] && touch "$CONF_FILE"
 
-DEST="$(awk '/^Destination / { gsub(/Destination /,""); print }' "$CONF_FILE")"
-SOURCE="$(awk '/^Source / { gsub(/Source /,""); print }' "$CONF_FILE")"
+DEST="$(awk '/^Destination / { gsub(/^Destination /, ""); print }' "$CONF_FILE")"
+SOURCE="$(awk '/^Source / { gsub(/^Source /, ""); print }' "$CONF_FILE")"
+
+[ -z "$DEST" ]   && panic "Destination not set in $CONF_FILE"
+[ -z "$SOURCE" ] && panic "Source not set in $CONF_FILE"
+[ ! -d "$DEST" ]   && panic "$DEST does not exist"
+[ ! -d "$SOURCE" ] && panic "$SOURCE does not exist"
 
 daily_date="$(date '+%Y-%m-%d')"
 monthly_date="$(date '+%Y-%m')"
 yearly_date="$(date '+%Y')"
 
-[ ! -d "$DEST" ] && panic "$DEST does not exist"
-[ ! -d "$SOURCE" ] && panic "$SOURCE does not exist"
-
 backup "$DEST/daily/$daily_date"
 backup "$DEST/monthly/$monthly_date"
 backup "$DEST/yearly/$yearly_date"
 
+rotate "$DEST/daily"   30
+rotate "$DEST/monthly" 12
+rotate "$DEST/yearly"  5
